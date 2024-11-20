@@ -6,6 +6,8 @@
 #include <string.h>
 #include "board/board.hpp"
 
+
+// int index_allboard = 0;
 int main()
 {
     // Disable buffering on stdout, making it unbuffered
@@ -37,8 +39,20 @@ int main()
             }
             scanf("%d", &dice);
             Board current_board;
+            // current_board = allboard[index_allboard];
             current_board.init_with_piecepos(piece_position, moving_color);
             current_board.dice = dice;
+            current_board.this_id = 0;
+            current_board.depth = 0;
+            current_board.move_count = 0;
+            current_board.parent_id = 0;
+            
+            current_board.nchild = 0;
+            
+            current_board.totaln = 0;
+            
+            current_board.wins = 0;
+            
             current_board.print_board();
             int step;
             // in first move, dice = -1

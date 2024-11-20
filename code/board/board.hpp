@@ -10,13 +10,30 @@ typedef struct _board
 {
     // all captured: piece_bits becomes 0
     unsigned char piece_bits[2];
+    int board[25];
     int piece_position[2][PIECE_NUM];
     // blank is -1
-    int board[25];
+    
     char moves[PIECE_NUM][2];
     int move_count;
     char moving_color;
     char dice;
+    
+    int depth;
+    int parent_id;
+    
+    int this_id;
+    
+    int child_id[64];
+    int nchild = 0;
+    
+    int totaln;
+    long double csqrtlogtn;
+    long double csqrttn;
+    
+    int wins;
+    long double winrate;
+
     void init_with_piecepos(int input_piecepos[2][6], char input_color);
     void move(int id_with_dice);
     void generate_moves();
@@ -27,5 +44,13 @@ typedef struct _board
     bool simulate();
     int decide();
     int first_move_decide_dice();
+
+    void clear(){
+        nchild = 0;
+        totaln = 0;
+        wins = 0;
+        move_count = 0;
+
+    }
 } Board;
 #endif

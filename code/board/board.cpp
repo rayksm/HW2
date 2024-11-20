@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <assert.h>
 
+
+
 void Board::init_with_piecepos(int input_piecepos[2][6], char input_color)
 {
     moving_color = input_color;
@@ -23,6 +25,14 @@ void Board::init_with_piecepos(int input_piecepos[2][6], char input_color)
             }
         }
     }
+    
+    depth = 0;
+    
+    parent_id = -1;
+    nchild = 0;
+    
+    totaln = 0;
+    wins = 0;
 }
 void Board::move(int id_with_dice)
 {
@@ -55,7 +65,9 @@ void Board::generate_moves()
     int piece1_pos, piece2_pos;
     movable_piece1 = movable_piece_table[piece_bits[moving_color]][dice][0];
     // movable_piece1 will always != -1
+    //printf("HHH\n");
     assert(movable_piece1 != -1);
+    //printf("AAA\n");
     movable_piece2 = movable_piece_table[piece_bits[moving_color]][dice][1];
     if (movable_piece2 == -1)
     {
