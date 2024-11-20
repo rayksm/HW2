@@ -35,15 +35,17 @@ int re_argmax(int child_id[], int move_num, int parent_id){
     int argmax = child_id[0];
 
     // max search
-    float max_UCB = -1;
+    float max_UCB = -1000;
     // printf("%d\n", move_num);
     float LCB_array[64];
     float not_pruning[64] = {0};
     // pruning
     for (int i = 0; i < move_num; i++){
-        if(child_id[i] < 0) LCB_array[i] = -1;
+        if(child_id[i] < 0){
+            LCB_array[i] = 1000;
+        }
         LCB_array[i] = fast_LCB(allboard[child_id[i]].wins, allboard[child_id[i]].totaln, allboard[parent_id].totaln);
-        if (LCB_array[i] > max_UCB)
+        if (LCB_array[i] > max_UCB && child_id[i] >= 0)
         {
             max_UCB = LCB_array[i];
             argmax = child_id[i];
@@ -71,10 +73,13 @@ int re_argmax(int child_id[], int move_num, int parent_id){
             }
         }
     }
-
     //pruning
     for (int i = 0; i < move_num; i++)
-        if(not_pruning[i] == 0) child_id[i] = -1;
+        if(not_pruning[i] == 0 && child_id[i] != argmax){
+            allboard[parent_id].child_id[i] = -1;
+
+            //printf("%d, %lf\n", argmax, max_UCB);       
+        }
     
     return re_argmax(allboard[argmax].child_id, allboard[argmax].nchild, argmax);
 }
@@ -83,7 +88,7 @@ int MCS_UCB_argmax(int parent_id, int child_id[], int move_num, int target_id)
 {
     // you can change the parameter C of the UCB here
     // if you comment out this line, the default value will be 1.41421
-    ucb_param_C = 2.41421;
+    ucb_param_C = 0.8;
 
     unsigned int total_sample_num = 0;
     // start simulating
@@ -103,11 +108,15 @@ int MCS_UCB_argmax(int parent_id, int child_id[], int move_num, int target_id)
     // Then do MCS UCB
     while (total_sample_num < MAX_SIMULATION_COUNT)
     {   
+        //printf("L109\n");
         // find the child which has the highest UCB
         for (int i = 0; i < move_num; i++)
         {   
             // pruning
-            if(child_id[i] < 0) continue;
+            if(child_id[i] < 0){
+                //printf("Yes\n");
+                continue;
+            }
 
             int loss_sim = 0, win_sim = 0;
             for (int j = 0; j < SIMULATION_BATCH_NUM; j++)
@@ -118,17 +127,25 @@ int MCS_UCB_argmax(int parent_id, int child_id[], int move_num, int target_id)
             }
             re_update(child_id[i], win_sim, loss_sim, 1);
         }
-        
+        //printf("L128\n");
         // find next point to simulate
         // now child_id, parent_id, move_num need to update
         parent_id = re_argmax(allboard[target_id].child_id, allboard[target_id].nchild, target_id);
-
+        //printf("L132\n");
         // is this node is goal can break now
-        if (allboard[parent_id].check_winner()){
-            re_update(parent_id, SIMULATION_BATCH_NUM, 0, 1);
-            break;
+        
+        while(total_sample_num < MAX_SIMULATION_COUNT){
+            if (allboard[parent_id].check_winner()){
+                re_update(parent_id, SIMULATION_BATCH_NUM, 0, 1);
+                total_sample_num += SIMULATION_BATCH_NUM;
+            }
+            else{
+                break;
+            }
+            parent_id = re_argmax(allboard[target_id].child_id, allboard[target_id].nchild, target_id);
         }
-
+        
+        //printf("L138\n");
         //MCTS find next node
         allboard[parent_id].generate_moves();
         for (int j = 0; j < allboard[parent_id].move_count; j++)
@@ -147,6 +164,7 @@ int MCS_UCB_argmax(int parent_id, int child_id[], int move_num, int target_id)
             
             allboard[index_allboard].move(j);
         }
+        //printf("L157\n");
         move_num = allboard[parent_id].move_count;
         child_id = allboard[parent_id].child_id;
     }
