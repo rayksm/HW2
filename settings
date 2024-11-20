@@ -6,7 +6,7 @@
     "log_game_record": true,
     "opponent_type_id": "2",
     "first_mover": "0",
-    "round_num": "100",
+    "round_num": "10",
     "time_limit": "30",
     "Local_AI_1": "/nfs/select/r12942049/Desktop/HW2/code/agent",
     "Local_AI_2": "/nfs/select/r12942049/Desktop/HW2/code/agent",
