@@ -11,10 +11,10 @@
 #include <cmath>
 #include <time.h>
 #define SIMULATION_BATCH_NUM 150
-#define MAX_SIMULATION_COUNT 8000000
+#define MAX_SIMULATION_COUNT 4000000
 
 // init lots board
-#define MaxBoard 500009
+#define MaxBoard 200000
 static Board allboard[MaxBoard];
 int index_allboard = 0;
 float visited = 0;
@@ -23,7 +23,7 @@ float UCB_rand[64];
 //float start_time, end_time;
 struct timespec start, end;
 float remain_time = 30.0, can_use;
-const float timeratio = 0.3;
+const float timeratio = 0.25;
 
 // MCS UCB version
 // I use max sample number as the simulation limit.
@@ -117,7 +117,7 @@ int MCS_UCB_argmax(int parent_id, int child_id[], int move_num, int target_id)
     }
     
     // Then do MCS UCB
-    while (total_sample_num < MAX_SIMULATION_COUNT)
+    while (total_sample_num < MAX_SIMULATION_COUNT && index_allboard + 1 < MaxBoard)
     {   
         // for timer
         clock_gettime(CLOCK_REALTIME, &end);
@@ -200,6 +200,9 @@ int MCS_UCB_argmax(int parent_id, int child_id[], int move_num, int target_id)
             allboard[parent_id].nchild++;
             
             allboard[index_allboard].move(j);
+
+            // never overflow
+            if(index_allboard + 1 > MaxBoard) break;
         }
         move_num = allboard[parent_id].move_count;
         child_id = allboard[parent_id].child_id;
