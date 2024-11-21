@@ -88,7 +88,7 @@ int MCS_UCB_argmax(int parent_id, int child_id[], int move_num, int target_id)
 {
     // you can change the parameter C of the UCB here
     // if you comment out this line, the default value will be 1.41421
-    ucb_param_C = 0.8;
+    ucb_param_C = 1.2;
 
     unsigned int total_sample_num = 0;
     // start simulating
@@ -134,8 +134,15 @@ int MCS_UCB_argmax(int parent_id, int child_id[], int move_num, int target_id)
         //printf("L132\n");
         // is this node is goal can break now
         
+        int breakflag = 0;
         while(total_sample_num < MAX_SIMULATION_COUNT){
-            if (allboard[parent_id].check_winner()){
+            if (allboard[parent_id].check_winner() && allboard[parent_id].depth % 2 == 1){
+                re_update(parent_id, SIMULATION_BATCH_NUM, 0, 1);
+                total_sample_num += SIMULATION_BATCH_NUM;
+                breakflag = 1;
+                break;
+            }
+            else if(allboard[parent_id].check_winner()){
                 re_update(parent_id, SIMULATION_BATCH_NUM, 0, 1);
                 total_sample_num += SIMULATION_BATCH_NUM;
             }
@@ -144,6 +151,7 @@ int MCS_UCB_argmax(int parent_id, int child_id[], int move_num, int target_id)
             }
             parent_id = re_argmax(allboard[target_id].child_id, allboard[target_id].nchild, target_id);
         }
+        if(breakflag || total_sample_num >= MAX_SIMULATION_COUNT) break;
         
         //printf("L138\n");
         //MCTS find next node
