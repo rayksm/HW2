@@ -10,15 +10,22 @@
 #include <math.h>
 #include <cmath>
 #include <time.h>
-#define SIMULATION_BATCH_NUM 150
-#define MAX_SIMULATION_COUNT 2500000
+#define SIMULATION_BATCH_NUM 100
+#define MAX_SIMULATION_COUNT 3000000
+
+//  best para now
+// SIMULATION_BATCH_NUM = 150
+// 0.2 = 0
 
 // init lots board
-#define MaxBoard 100000
+#define MaxBoard 200000
 static Board allboard[MaxBoard];
 int index_allboard = 0;
 float visited = 0;
 float UCB_rand[64];
+
+// lower bound for exploration
+#define Lowbound_explore 400
 
 //float start_time, end_time;
 struct timespec start, end;
@@ -101,7 +108,10 @@ int re_argmax(int child_id[], int move_num, int parent_id){
             //printf("%d, %lf\n", argmax, max_UCB);       
         }
     
-    return re_argmax(allboard[argmax].child_id, allboard[argmax].nchild, argmax);
+    // check lower bound
+    // if not return parent if yes keep searching
+    if(allboard[argmax].totaln < Lowbound_explore && parent_id != 0) return parent_id;
+    else return re_argmax(allboard[argmax].child_id, allboard[argmax].nchild, argmax);
     
 }
 
@@ -117,7 +127,7 @@ int MCS_UCB_argmax(int parent_id, int child_id[], int move_num, int target_id)
     for (int i = 0; i < move_num; i++)
     {   
         int loss_sim = 0, win_sim = 0;
-        for (int j = 0; j < SIMULATION_BATCH_NUM; j++)
+        for (int j = 0; j < Lowbound_explore; j++)
         {
             total_sample_num += 1;
             if(allboard[child_id[i]].simulate() == 1) win_sim++;
@@ -157,7 +167,7 @@ int MCS_UCB_argmax(int parent_id, int child_id[], int move_num, int target_id)
             if(child_id[i] < 0) continue;
 
             UCB_rand[i] = fast_UCB(allboard[child_id[i]].wins, allboard[child_id[i]].totaln, parent_log);
-            UCB_rand[i] = exp((visited) * UCB_rand[i]);
+            UCB_rand[i] = exp((visited + 0.2 * (allboard[parent_id].depth + 1)) * UCB_rand[i]);
             sumUCB += UCB_rand[i];    
         }
         
@@ -194,6 +204,14 @@ int MCS_UCB_argmax(int parent_id, int child_id[], int move_num, int target_id)
         }
         if(total_sample_num >= MAX_SIMULATION_COUNT) break;
         
+        //MCTS find next node
+        // if the child is assigned not to be assigned again
+        if(allboard[parent_id].move_count > 0){
+            move_num = allboard[parent_id].move_count;
+            child_id = allboard[parent_id].child_id;
+            continue;
+        }
+
         //MCTS find next node
         allboard[parent_id].generate_moves();
         for (int j = 0; j < allboard[parent_id].move_count; j++)
