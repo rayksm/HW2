@@ -23,12 +23,12 @@ int fast_log2(unsigned long x)
 }
 
 // very fast UCB!
-float fast_UCB(unsigned int win_num, unsigned int node_sample_num, unsigned int total_sample_num)
+float fast_UCB(unsigned int win_num, unsigned int node_sample_num, unsigned int total_sample_num_log)
 {
-    return (float)win_num / (float)node_sample_num + ucb_param_C * sqrt((float)fast_log2(total_sample_num) / (float)node_sample_num);
+    return (float)win_num / (float)node_sample_num + ucb_param_C * sqrt((float)total_sample_num_log / (float)node_sample_num);
 }
 // very fast LCB!
-float fast_LCB(unsigned int win_num, unsigned int node_sample_num, unsigned int total_sample_num)
+float fast_LCB(unsigned int win_num, unsigned int node_sample_num, unsigned int total_sample_num_log)
 {
-    return (float)win_num / (float)node_sample_num - ucb_param_C * sqrt((float)fast_log2(total_sample_num) / (float)node_sample_num);
+    return (float)win_num / (float)node_sample_num - ucb_param_C * sqrt((float)total_sample_num_log / (float)node_sample_num);
 }

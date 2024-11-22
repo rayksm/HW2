@@ -11,10 +11,10 @@
 #include <cmath>
 #include <time.h>
 #define SIMULATION_BATCH_NUM 150
-#define MAX_SIMULATION_COUNT 4000000
+#define MAX_SIMULATION_COUNT 2500000
 
 // init lots board
-#define MaxBoard 200000
+#define MaxBoard 100000
 static Board allboard[MaxBoard];
 int index_allboard = 0;
 float visited = 0;
@@ -23,7 +23,7 @@ float UCB_rand[64];
 //float start_time, end_time;
 struct timespec start, end;
 float remain_time = 30.0, can_use;
-const float timeratio = 0.25;
+const float timeratio = 1;
 
 // MCS UCB version
 // I use max sample number as the simulation limit.
@@ -42,18 +42,28 @@ int re_argmax(int child_id[], int move_num, int parent_id){
     if(move_num == 0){
         return parent_id;
     }
-    int argmax = child_id[0];
+
+    int argmax; 
+    for(int i = 0; i < move_num; i++){
+        if(child_id[i] != -1){
+            argmax = child_id[i];
+            break;
+        }
+    }
+    
 
     // max search
     float max_UCB = -1000;
     float LCB_array[64];
     float not_pruning[64] = {0};
+    int parent_log = fast_log2(allboard[parent_id].totaln);
+
     // pruning
     for (int i = 0; i < move_num; i++){
         if(child_id[i] < 0){
             LCB_array[i] = 1000;
         }
-        LCB_array[i] = fast_LCB(allboard[child_id[i]].wins, allboard[child_id[i]].totaln, allboard[parent_id].totaln);
+        LCB_array[i] = fast_LCB(allboard[child_id[i]].wins, allboard[child_id[i]].totaln, parent_log);
         if (LCB_array[i] > max_UCB && child_id[i] >= 0)
         {
             max_UCB = LCB_array[i];
@@ -65,7 +75,7 @@ int re_argmax(int child_id[], int move_num, int parent_id){
     {   
         if(child_id[i] >= 0){
             // float child_UCB = fast_UCB(win_num[i], node_sample_num[i], total_sample_num);
-            float child_UCB = fast_UCB(allboard[child_id[i]].wins, allboard[child_id[i]].totaln, allboard[parent_id].totaln);
+            float child_UCB = fast_UCB(allboard[child_id[i]].wins, allboard[child_id[i]].totaln, parent_log);
             
             if (child_UCB > max_UCB)
             {
@@ -131,7 +141,7 @@ int MCS_UCB_argmax(int parent_id, int child_id[], int move_num, int target_id)
             if(child_id[i] < 0) continue;
 
             int loss_sim = 0, win_sim = 0;
-            for (int j = 0; j < SIMULATION_BATCH_NUM; j++)
+            for (int j = 0; j < SIMULATION_BATCH_NUM / 2; j++)
             {
                 total_sample_num += 1;
                 if(allboard[child_id[i]].simulate() == 1) win_sim++;
@@ -142,11 +152,12 @@ int MCS_UCB_argmax(int parent_id, int child_id[], int move_num, int target_id)
 
         // Simulate all childrens from randomness (cause by UCB and time step)
         float sumUCB = 0;
+        int parent_log = fast_log2(allboard[parent_id].totaln);
         for(int i = 0; i < move_num; i++){
             if(child_id[i] < 0) continue;
 
-            UCB_rand[i] = fast_UCB(allboard[child_id[i]].wins, allboard[child_id[i]].totaln, allboard[parent_id].totaln);
-            UCB_rand[i] = exp((1 / visited) * UCB_rand[i]);
+            UCB_rand[i] = fast_UCB(allboard[child_id[i]].wins, allboard[child_id[i]].totaln, parent_log);
+            UCB_rand[i] = exp((visited) * UCB_rand[i]);
             sumUCB += UCB_rand[i];    
         }
         
@@ -202,7 +213,10 @@ int MCS_UCB_argmax(int parent_id, int child_id[], int move_num, int target_id)
             allboard[index_allboard].move(j);
 
             // never overflow
-            if(index_allboard + 1 > MaxBoard) break;
+            if(index_allboard + 1 > MaxBoard){
+                printf("overflow\n");
+                break;
+            }
         }
         move_num = allboard[parent_id].move_count;
         child_id = allboard[parent_id].child_id;
@@ -274,7 +288,7 @@ int Board::first_move_decide_dice()
     // A nice example for expansion
     // quick and elegant!
 
-    visited += 1;
+    //visited += .4;
     allboard[index_allboard] = *(this);
     for (int i = 0; i < PIECE_NUM; i++)
     {
