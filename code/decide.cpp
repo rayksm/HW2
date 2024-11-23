@@ -11,14 +11,14 @@
 #include <cmath>
 #include <time.h>
 #define SIMULATION_BATCH_NUM 100
-#define MAX_SIMULATION_COUNT 3000000
+#define MAX_SIMULATION_COUNT 3500000
 
 //  best para now
 // SIMULATION_BATCH_NUM = 150
-// 0.2 = 0
+// 1 = 0, 0.2 = 65%
 
 // init lots board
-#define MaxBoard 200000
+#define MaxBoard 100000
 static Board allboard[MaxBoard];
 int index_allboard = 0;
 float visited = 0;
@@ -45,15 +45,17 @@ void re_update(int cur_id, int thiswin, int thisloss, int flag){
     re_update(allboard[cur_id].parent_id, thiswin, thisloss, flag ^ 1);
 }
 
-int re_argmax(int child_id[], int move_num, int parent_id){
+int re_argmax(int child_id_start, int move_num, int parent_id){
     if(move_num == 0){
         return parent_id;
     }
 
-    int argmax; 
+    int argmax;
+    int now_child_id; 
     for(int i = 0; i < move_num; i++){
-        if(child_id[i] != -1){
-            argmax = child_id[i];
+        now_child_id = child_id_start + i;
+        if(allboard[now_child_id].be_pruned != 1){
+            argmax = now_child_id;
             break;
         }
     }
@@ -67,27 +69,30 @@ int re_argmax(int child_id[], int move_num, int parent_id){
 
     // pruning
     for (int i = 0; i < move_num; i++){
-        if(child_id[i] < 0){
+        now_child_id = child_id_start + i;
+        if(allboard[now_child_id].be_pruned != 1){
             LCB_array[i] = 1000;
         }
-        LCB_array[i] = fast_LCB(allboard[child_id[i]].wins, allboard[child_id[i]].totaln, parent_log);
-        if (LCB_array[i] > max_UCB && child_id[i] >= 0)
+        LCB_array[i] = fast_LCB(allboard[now_child_id].wins, allboard[now_child_id].totaln, parent_log);
+        if (LCB_array[i] > max_UCB && allboard[now_child_id].be_pruned == 0)
         {
             max_UCB = LCB_array[i];
-            argmax = child_id[i];
+            argmax = now_child_id;
         }
     }
 
     for (int i = 0; i < move_num; i++)
     {   
-        if(child_id[i] >= 0){
+        now_child_id = child_id_start + i;
+        if(allboard[now_child_id].be_pruned != 1){
+            
             // float child_UCB = fast_UCB(win_num[i], node_sample_num[i], total_sample_num);
-            float child_UCB = fast_UCB(allboard[child_id[i]].wins, allboard[child_id[i]].totaln, parent_log);
+            float child_UCB = fast_UCB(allboard[now_child_id].wins, allboard[now_child_id].totaln, parent_log);
             
             if (child_UCB > max_UCB)
             {
                 max_UCB = child_UCB;
-                argmax = child_id[i];
+                argmax = now_child_id;
             }
 
             // pruning
@@ -101,39 +106,44 @@ int re_argmax(int child_id[], int move_num, int parent_id){
     }
 
     //pruning
-    for (int i = 0; i < move_num; i++)
-        if(not_pruning[i] == 0 && child_id[i] != argmax){
-            allboard[parent_id].child_id[i] = -1;
+    for (int i = 0; i < move_num; i++){
+        now_child_id = child_id_start + i;
+        if(not_pruning[i] == 0 && now_child_id != argmax){
+            allboard[now_child_id].be_pruned = 1;
 
             //printf("%d, %lf\n", argmax, max_UCB);       
         }
+    }
+        
     
     // check lower bound
     // if not return parent if yes keep searching
     if(allboard[argmax].totaln < Lowbound_explore && parent_id != 0) return parent_id;
-    else return re_argmax(allboard[argmax].child_id, allboard[argmax].nchild, argmax);
+    else return re_argmax(allboard[argmax].child_id_start, allboard[argmax].move_count, argmax);
     
 }
 
-int MCS_UCB_argmax(int parent_id, int child_id[], int move_num, int target_id)
+int MCS_UCB_argmax(int parent_id, int child_id_start, int move_num, int target_id)
 {
     // you can change the parameter C of the UCB here
     // if you comment out this line, the default value will be 1.41421
     ucb_param_C = 1.2;
+    int now_child_id;
 
     unsigned int total_sample_num = 0;
     // start simulating
     // Prevent 0 appears in Denominator, do a even sampling first
     for (int i = 0; i < move_num; i++)
     {   
+        now_child_id = child_id_start + i;
         int loss_sim = 0, win_sim = 0;
         for (int j = 0; j < Lowbound_explore; j++)
         {
             total_sample_num += 1;
-            if(allboard[child_id[i]].simulate() == 1) win_sim++;
+            if(allboard[now_child_id].simulate() == 1) win_sim++;
             else loss_sim++;
         }
-        re_update(child_id[i], win_sim, loss_sim, 1);
+        re_update(now_child_id, win_sim, loss_sim, 1);
     }
     
     // Then do MCS UCB
@@ -147,34 +157,39 @@ int MCS_UCB_argmax(int parent_id, int child_id[], int move_num, int target_id)
         // Simulate all childrens first
         for (int i = 0; i < move_num; i++)
         {   
+            now_child_id = child_id_start + i;
             // pruning
-            if(child_id[i] < 0) continue;
+            if(allboard[now_child_id].be_pruned == 1) continue;
 
             int loss_sim = 0, win_sim = 0;
             for (int j = 0; j < SIMULATION_BATCH_NUM / 2; j++)
             {
                 total_sample_num += 1;
-                if(allboard[child_id[i]].simulate() == 1) win_sim++;
+                if(allboard[now_child_id].simulate() == 1) win_sim++;
                 else loss_sim++;
             }
-            re_update(child_id[i], win_sim, loss_sim, 1);
+            re_update(now_child_id, win_sim, loss_sim, 1);
         }
 
         // Simulate all childrens from randomness (cause by UCB and time step)
         float sumUCB = 0;
         int parent_log = fast_log2(allboard[parent_id].totaln);
         for(int i = 0; i < move_num; i++){
-            if(child_id[i] < 0) continue;
+            now_child_id = child_id_start + i;
+            if(allboard[now_child_id].be_pruned == 1) continue;
 
-            UCB_rand[i] = fast_UCB(allboard[child_id[i]].wins, allboard[child_id[i]].totaln, parent_log);
-            UCB_rand[i] = exp((visited + 0.2 * (allboard[parent_id].depth + 1)) * UCB_rand[i]);
+            UCB_rand[i] = fast_UCB(allboard[now_child_id].wins, allboard[now_child_id].totaln, parent_log);
+            //UCB_rand[i] = exp((visited + .2 * (allboard[parent_id].depth + 1)) * UCB_rand[i]);
+            //UCB_rand[i] = exp((visited) * UCB_rand[i]); // this can get 70%!!!
+            UCB_rand[i] = exp((10 / (allboard[parent_id].move_count + 1)) * UCB_rand[i]);
             sumUCB += UCB_rand[i];    
         }
         
         for(int i = 0; i < move_num; i++){
 
             // pruning
-            if(child_id[i] < 0) continue;
+            now_child_id = child_id_start + i;
+            if(allboard[now_child_id].be_pruned == 1) continue;
 
             int playnum = round(UCB_rand[i] * move_num * SIMULATION_BATCH_NUM / sumUCB);
 
@@ -182,15 +197,15 @@ int MCS_UCB_argmax(int parent_id, int child_id[], int move_num, int target_id)
             for (int j = 0; j < playnum; j++)
             {
                 total_sample_num += 1;
-                if(allboard[child_id[i]].simulate() == 1) win_sim++;
+                if(allboard[now_child_id].simulate() == 1) win_sim++;
                 else loss_sim++;
             }
-            re_update(child_id[i], win_sim, loss_sim, 1);
+            re_update(now_child_id, win_sim, loss_sim, 1);
         }
 
         // find next point to simulate
         // now child_id, parent_id, move_num need to update
-        parent_id = re_argmax(allboard[target_id].child_id, allboard[target_id].nchild, target_id);
+        parent_id = re_argmax(allboard[target_id].child_id_start, allboard[target_id].move_count, target_id);
 
         // is this node is goal can break now
         // always make sure the node has children
@@ -200,7 +215,7 @@ int MCS_UCB_argmax(int parent_id, int child_id[], int move_num, int target_id)
                 total_sample_num += SIMULATION_BATCH_NUM;
             }
             else break;
-            parent_id = re_argmax(allboard[target_id].child_id, allboard[target_id].nchild, target_id);
+            parent_id = re_argmax(allboard[target_id].child_id_start, allboard[target_id].move_count, target_id);
         }
         if(total_sample_num >= MAX_SIMULATION_COUNT) break;
         
@@ -208,25 +223,26 @@ int MCS_UCB_argmax(int parent_id, int child_id[], int move_num, int target_id)
         // if the child is assigned not to be assigned again
         if(allboard[parent_id].move_count > 0){
             move_num = allboard[parent_id].move_count;
-            child_id = allboard[parent_id].child_id;
+            child_id_start = allboard[parent_id].child_id_start;
             continue;
         }
 
         //MCTS find next node
         allboard[parent_id].generate_moves();
+        allboard[parent_id].child_id_start = index_allboard + 1;
         for (int j = 0; j < allboard[parent_id].move_count; j++)
         {
             allboard[++index_allboard] = allboard[parent_id];
             allboard[index_allboard].parent_id = parent_id;
             allboard[index_allboard].this_id = index_allboard;
             allboard[index_allboard].depth = allboard[parent_id].depth + 1;
-            allboard[index_allboard].nchild = 0;
+            //allboard[index_allboard].nchild = 0;
             allboard[index_allboard].totaln = 0;
             allboard[index_allboard].wins = 0;
             allboard[index_allboard].move_count = 0;
 
-            allboard[parent_id].child_id[j] = index_allboard;
-            allboard[parent_id].nchild++;
+            //allboard[parent_id].child_id[j] = index_allboard;
+            //allboard[parent_id].nchild++;
             
             allboard[index_allboard].move(j);
 
@@ -237,18 +253,20 @@ int MCS_UCB_argmax(int parent_id, int child_id[], int move_num, int target_id)
             }
         }
         move_num = allboard[parent_id].move_count;
-        child_id = allboard[parent_id].child_id;
+        child_id_start = allboard[parent_id].child_id_start;
     }
     
     // Then return best step according to the win rate
     // NOT UCB! NOT UCB! NOT UCB!
     int return_argmax = 0;
     float max_WR = -1;
-    for (int i = 0; i < allboard[target_id].nchild; i++)
+    for (int i = 0; i < allboard[target_id].move_count; i++)
     {   
         // pruning
-        if(child_id[i] < 0) continue;
-        float child_WR = (float)allboard[allboard[target_id].child_id[i]].wins / (float)allboard[allboard[target_id].child_id[i]].totaln;
+        now_child_id = allboard[target_id].child_id_start + i;
+        if(allboard[now_child_id].be_pruned == 1) continue;
+
+        float child_WR = (float)allboard[now_child_id].wins / (float)allboard[now_child_id].totaln;
         if (child_WR > max_WR)
         {
             max_WR = child_WR;
@@ -267,20 +285,20 @@ int Board::decide()
 
     // A nice example for expansion
     // quick and elegant!
-    
+    allboard[0].child_id_start = index_allboard + 1;
     for (int i = 0; i < allboard[0].move_count; i++)
     {
         allboard[++index_allboard] = allboard[0];
         allboard[index_allboard].parent_id = allboard[0].this_id;
         allboard[index_allboard].this_id = index_allboard;
         allboard[index_allboard].depth = allboard[0].depth + 1;
-        allboard[index_allboard].nchild = 0;
+        //allboard[index_allboard].nchild = 0;
         allboard[index_allboard].totaln = 0;
         allboard[index_allboard].wins = 0;
         allboard[index_allboard].move_count = 0;
 
-        allboard[0].child_id[i] = index_allboard;
-        allboard[0].nchild++;
+        //allboard[0].child_id[i] = index_allboard;
+        //allboard[0].nchild++;
         
         allboard[index_allboard].move(i);
     }
@@ -289,7 +307,7 @@ int Board::decide()
     clock_gettime(CLOCK_REALTIME, &start);
     can_use = remain_time * timeratio - 0.2;
 
-    int action = MCS_UCB_argmax(allboard[0].this_id, allboard[0].child_id, allboard[0].nchild, allboard[0].this_id);
+    int action = MCS_UCB_argmax(allboard[0].this_id, allboard[0].child_id_start, allboard[0].move_count, allboard[0].this_id);
     for(int i = 0; i < index_allboard; i++) allboard[i].clear();
     index_allboard = 0;
     
@@ -308,6 +326,8 @@ int Board::first_move_decide_dice()
 
     //visited += .4;
     allboard[index_allboard] = *(this);
+    allboard[0].child_id_start = index_allboard + 1;
+    allboard[0].move_count = PIECE_NUM;
     for (int i = 0; i < PIECE_NUM; i++)
     {
         // into child
@@ -316,13 +336,13 @@ int Board::first_move_decide_dice()
         allboard[index_allboard].parent_id = allboard[0].this_id;
         allboard[index_allboard].this_id = index_allboard;
         allboard[index_allboard].depth = allboard[this_id].depth + 1;
-        allboard[index_allboard].nchild = 0;
+        //allboard[index_allboard].nchild = 0;
         allboard[index_allboard].totaln = 0;
         allboard[index_allboard].wins = 0;
         allboard[index_allboard].move_count = 0;
 
-        allboard[this_id].child_id[i] = index_allboard;
-        allboard[this_id].nchild++;
+        //allboard[this_id].child_id[i] = index_allboard;
+        //allboard[this_id].nchild++;
         
     }
 
@@ -330,7 +350,7 @@ int Board::first_move_decide_dice()
     clock_gettime(CLOCK_REALTIME, &start);
     can_use = remain_time * timeratio - 0.2;
 
-    int action = MCS_UCB_argmax(allboard[0].this_id, allboard[0].child_id, allboard[0].nchild, allboard[0].this_id);
+    int action = MCS_UCB_argmax(allboard[0].this_id, allboard[0].child_id_start, allboard[0].move_count, allboard[0].this_id);
     for(int i = 0; i < index_allboard; i++) allboard[i].clear();
     index_allboard = 0;
     

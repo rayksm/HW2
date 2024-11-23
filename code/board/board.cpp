@@ -29,7 +29,7 @@ void Board::init_with_piecepos(int input_piecepos[2][6], char input_color)
     depth = 0;
     
     parent_id = -1;
-    nchild = 0;
+    //nchild = 0;
     
     totaln = 0;
     wins = 0;

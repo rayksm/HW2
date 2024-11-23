@@ -24,8 +24,8 @@ typedef struct _board
     
     int this_id;
     
-    int child_id[64];
-    int nchild = 0;
+    int child_id_start;
+    
     
     int totaln;
     long double csqrtlogtn;
@@ -33,6 +33,9 @@ typedef struct _board
     
     int wins;
     long double winrate;
+
+    int be_pruned = 0;
+    int child_exist_num = 0;
 
     void init_with_piecepos(int input_piecepos[2][6], char input_color);
     void move(int id_with_dice);
@@ -46,7 +49,7 @@ typedef struct _board
     int first_move_decide_dice();
 
     void clear(){
-        nchild = 0;
+        //nchild = 0;
         totaln = 0;
         wins = 0;
         move_count = 0;

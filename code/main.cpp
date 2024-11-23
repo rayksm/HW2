@@ -47,11 +47,13 @@ int main()
             current_board.move_count = 0;
             current_board.parent_id = 0;
             
-            current_board.nchild = 0;
+            //current_board.nchild = 0;
             
             current_board.totaln = 0;
             
             current_board.wins = 0;
+
+            current_board.be_pruned = 0;
             
             current_board.print_board();
             int step;
