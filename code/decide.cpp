@@ -26,7 +26,7 @@ float UCB_rand[64];
 
 // lower bound for exploration
 #define Lowbound_explore 200 // 400, 200 = 84%
-#define Pruning_Ratio 0.8 // 0.7 = 72%, 0.5 = 69%, 0.8 = 78%
+#define Pruning_Ratio 0.5 // 0.6 = 88%
 
 //float start_time, end_time;
 struct timespec start, end;
@@ -37,6 +37,15 @@ const float timeratio = 1;
 // I use max sample number as the simulation limit.
 // Recommend: Using wall clock time to precisely limit the time.
 // Advanced: Using both max sample number and wall clock time to limit the simiulation time.
+
+int count_pieces(char pieces){
+    int count = 0;
+    for(int i = 0; i < 6; i++){
+        count += pieces & 1;
+        pieces >>= 1;
+    }
+    return count;
+}
 
 void re_update(int cur_id, int thiswin, int thisloss, int flag){
     allboard[cur_id].wins += (flag * thiswin + (1 - flag) * thisloss);
@@ -74,10 +83,10 @@ int re_argmax(int child_id_start, int move_num, int parent_id){
     else{
         // max search
         float max_UCB = -1000;
-        float avg_LCB = 0;
+        int min_Piece_remain = 1000;
 
-        float LCB_array[64] = {0};
         float UCB_array[64];
+        int Piece_remain[64];
         
         //float not_pruning[64] = {0};
         int parent_log = fast_log2(allboard[parent_id].totaln);
@@ -89,9 +98,13 @@ int re_argmax(int child_id_start, int move_num, int parent_id){
                 continue;
             }
 
-            // calculate avg LCB
-            LCB_array[i] = fast_LCB(allboard[now_child_id].wins, allboard[now_child_id].totaln, parent_log);
-            avg_LCB += LCB_array[i];
+            // calculate piece remain
+            Piece_remain[i] =  count_pieces(allboard[now_child_id].piece_bits[allboard[now_child_id].moving_color ^ 1]); // the remain of our pieces
+            Piece_remain[i] += (6 - count_pieces(allboard[now_child_id].piece_bits[allboard[now_child_id].moving_color])); // 6 - the remains of opponents
+
+            if (Piece_remain[i] < min_Piece_remain){
+                min_Piece_remain = Piece_remain[i];
+            }
 
             // calculate max UCB
             UCB_array[i] = fast_UCB(allboard[now_child_id].wins, allboard[now_child_id].totaln, parent_log);
@@ -100,18 +113,18 @@ int re_argmax(int child_id_start, int move_num, int parent_id){
                 argmax = now_child_id;
             }
         }
-        avg_LCB /= allboard[parent_id].child_exist_num;
 
         //pruning
         for (int i = 0; i < move_num; i++){
             now_child_id = child_id_start + i;
-            if(now_child_id != argmax && allboard[now_child_id].be_pruned == 0 && LCB_array[i] < avg_LCB && UCB_array[i] < Pruning_Ratio * max_UCB){
+            
+            if(now_child_id != argmax && allboard[now_child_id].be_pruned == 0 && (Piece_remain[i] > min_Piece_remain || UCB_array[i] < Pruning_Ratio * max_UCB)){
                 allboard[now_child_id].be_pruned = 1;
                 allboard[parent_id].child_exist_num -= 1;    
             }
         }
                    
-        // check lower bound
+        // check lower boundq
         // if not return parent if yes keep searching
         if(allboard[argmax].totaln < Lowbound_explore && parent_id != 0) return parent_id;
         else return re_argmax(allboard[argmax].child_id_start, allboard[argmax].move_count, argmax);
@@ -175,10 +188,8 @@ int MCS_UCB_argmax(int parent_id, int child_id_start, int move_num, int target_i
             if(allboard[now_child_id].be_pruned == 1) continue;
 
             UCB_rand[i] = fast_UCB(allboard[now_child_id].wins, allboard[now_child_id].totaln, parent_log);
-            //UCB_rand[i] = exp((visited + .2 * (allboard[parent_id].depth + 1)) * UCB_rand[i]);
-            UCB_rand[i] = exp((visited) * UCB_rand[i]); // this can get 70%!!!
-            //UCB_rand[i] = exp((10 / (allboard[parent_id].move_count + 1)) * UCB_rand[i]);
-            //UCB_rand[i] = exp((10 / (allboard[parent_id].child_exist_num + 1)) * UCB_rand[i]);
+            UCB_rand[i] = exp(UCB_rand[i]);
+            //UCB_rand[i] = exp((visited) * UCB_rand[i]); // at the end of the game the explration should decrease
             sumUCB += UCB_rand[i];    
         }
         
@@ -228,34 +239,28 @@ int MCS_UCB_argmax(int parent_id, int child_id_start, int move_num, int target_i
         allboard[parent_id].generate_moves();
         allboard[parent_id].child_id_start = index_allboard + 1;
         allboard[parent_id].child_exist_num = allboard[parent_id].move_count;
-        for (int j = 0; j < allboard[parent_id].move_count; j++)
-        {
+        for (int j = 0; j < allboard[parent_id].move_count; j++){
+
             allboard[++index_allboard] = allboard[parent_id];
             allboard[index_allboard].parent_id = parent_id;
             allboard[index_allboard].this_id = index_allboard;
             allboard[index_allboard].depth = allboard[parent_id].depth + 1;
-            //allboard[index_allboard].nchild = 0;
+
             allboard[index_allboard].totaln = 0;
             allboard[index_allboard].wins = 0;
             allboard[index_allboard].move_count = 0;
 
-            //allboard[parent_id].child_id[j] = index_allboard;
-            //allboard[parent_id].nchild++;
             
             allboard[index_allboard].move(j);
 
             // never overflow
-            if(index_allboard + 1 > MaxBoard){
-                printf("overflow\n");
-                break;
-            }
+            if(index_allboard + 1 > MaxBoard) break;
         }
         move_num = allboard[parent_id].move_count;
         child_id_start = allboard[parent_id].child_id_start;
     }
     
     // Then return best step according to the win rate
-    // NOT UCB! NOT UCB! NOT UCB!
     int return_argmax = 0;
     float max_WR = -1;
     for (int i = 0; i < allboard[target_id].move_count; i++)
@@ -265,8 +270,7 @@ int MCS_UCB_argmax(int parent_id, int child_id_start, int move_num, int target_i
         if(allboard[now_child_id].be_pruned == 1) continue;
 
         float child_WR = (float)allboard[now_child_id].wins / (float)allboard[now_child_id].totaln;
-        if (child_WR > max_WR)
-        {
+        if (child_WR > max_WR){
             max_WR = child_WR;
             return_argmax = i;
         }
@@ -291,14 +295,11 @@ int Board::decide()
         allboard[index_allboard].parent_id = allboard[0].this_id;
         allboard[index_allboard].this_id = index_allboard;
         allboard[index_allboard].depth = allboard[0].depth + 1;
-        //allboard[index_allboard].nchild = 0;
+
         allboard[index_allboard].totaln = 0;
         allboard[index_allboard].wins = 0;
         allboard[index_allboard].move_count = 0;
 
-        //allboard[0].child_id[i] = index_allboard;
-        //allboard[0].nchild++;
-        
         allboard[index_allboard].move(i);
     }
 
@@ -323,7 +324,6 @@ int Board::first_move_decide_dice()
     // A nice example for expansion
     // quick and elegant!
 
-    //visited += .4;
     allboard[index_allboard] = *(this);
     allboard[0].child_id_start = index_allboard + 1;
     allboard[0].move_count = PIECE_NUM;
@@ -336,14 +336,10 @@ int Board::first_move_decide_dice()
         allboard[index_allboard].parent_id = allboard[0].this_id;
         allboard[index_allboard].this_id = index_allboard;
         allboard[index_allboard].depth = allboard[this_id].depth + 1;
-        //allboard[index_allboard].nchild = 0;
+
         allboard[index_allboard].totaln = 0;
         allboard[index_allboard].wins = 0;
-        allboard[index_allboard].move_count = 0;
-
-        //allboard[this_id].child_id[i] = index_allboard;
-        //allboard[this_id].nchild++;
-        
+        allboard[index_allboard].move_count = 0;      
     }
 
     // for timer
