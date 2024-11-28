@@ -336,6 +336,7 @@ int Board::first_move_decide_dice()
         allboard[index_allboard].parent_id = allboard[0].this_id;
         allboard[index_allboard].this_id = index_allboard;
         allboard[index_allboard].depth = allboard[this_id].depth + 1;
+        allboard[index_allboard].moving_color = allboard[0].moving_color ^ 1;
 
         allboard[index_allboard].totaln = 0;
         allboard[index_allboard].wins = 0;
